@@ -9,6 +9,9 @@ import json
 import csv
 import logging
 import threading
+import datetime
+import errno
+import shutil
 from optparse import OptionParser
 from email import message_from_string  # For headers handling
 import time
@@ -111,7 +114,7 @@ class TestConfig:
     verbose = False
     ssl_insecure = False
     skip_term_colors = False  # Turn off output term colors
-    junit = False  # Turn off JUnit XML ouput
+    junit = None  # Turn off JUnit XML ouput
 
     # Binding and creation of generators
     variable_binds = None
@@ -717,6 +720,7 @@ def run_testsets(testsets):
         print("===================================")
 
     # Print summary results
+    test_end_date = datetime.datetime.now().isoformat()
     for group in sorted(group_results.keys()):
         test_count = len(group_results[group])
         failures = group_failure_counts[group]
@@ -732,6 +736,33 @@ def run_testsets(testsets):
                 print('\033[91m' + output_string + '\033[0m')
             else:
                 print('\033[92m' + output_string + '\033[0m')
+
+        if myconfig.junit:
+            out_file = os.path.join(myconfig.junit, 'test-' + group.lower().replace(' ', '-') + '.xml')
+            with open(out_file, 'w+') as f:
+                xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                  <testsuite errors="0" failures="%d" skipped="0" name="%s" tests="%d" timestamp="%s" hostname="%s">
+                    <properties>  </properties>
+                """ % (failures, group, test_count, test_end_date, os.uname()[1])
+
+                for r in group_results[group]:
+                    if r.passed:
+                        xml += """<testcase classname="%s" name="%s"></testcase>""" % (r.test.group, r.test.name)
+                        xml += "\n"
+                    else:
+                        xml += """<testcase classname="%s" name="%s">""" % (r.test.group, r.test.name)
+                        for failure in r.failures:
+                            xml += """<failure type="%s">%s</failure>""" % (failure.failure_type, failure.message)
+                        xml += "</testcase>\n"
+
+                xml += """
+                <system-out>  </system-out>
+                <system-err>  </system-err>
+                </testsuite>
+                """
+
+                f.write(xml)
 
     return total_failures
 
@@ -800,7 +831,7 @@ def main(args):
         interactive   - OPTIONAL - mode that prints info before and after test exectuion and pauses for user input for each test
         absolute_urls - OPTIONAL - mode that treats URLs in tests as absolute/full URLs instead of relative URLs
         skip_term_colors - OPTIONAL - mode that turn off the output term colors
-        junit         - OPTIONAL - Output JUnit XML for each test group
+        junit         - OPTIONAL - Directory to output JUnit XML for each test group
     """
 
     if 'log' in args and args['log'] is not None:
@@ -855,7 +886,15 @@ def main(args):
             t.config.skip_term_colors = safe_to_bool(args['skip_term_colors'])
 
         if 'junit' in args and args['junit'] is not None:
-            t.config.junit = safe_to_bool(args['junit'])
+            t.config.junit = args['junit']
+
+            # re-create output directory for JUnit results
+            shutil.rmtree(t.config.junit, ignore_errors=True)
+            try:
+                os.makedirs(t.config.junit)
+            except OSError as e:
+                if e.errno != errno.EEXIST:
+                    raise
 
     # Execute all testsets
     failures = run_testsets(tests)
@@ -891,8 +930,8 @@ def parse_command_line_args(args_in):
                       action="store_true", dest="absolute_urls")
     parser.add_option(u'--skip_term_colors', help='Turn off the output term colors',
                       action='store_true', default=False, dest="skip_term_colors")
-    parser.add_option(u'--junit', help='Output JUnit XML for each test group',
-                      action='store_true', default=False, dest="junit")
+    parser.add_option(u'--junit', help='Output Directory to output JUnit XML for each test group',
+                      action='store', type='string', default=None, dest='junit')
 
     (args, unparsed_args) = parser.parse_args(args_in)
     args = vars(args)
