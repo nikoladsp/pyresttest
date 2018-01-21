@@ -111,6 +111,7 @@ class TestConfig:
     verbose = False
     ssl_insecure = False
     skip_term_colors = False  # Turn off output term colors
+    junit = False  # Turn off JUnit XML ouput
 
     # Binding and creation of generators
     variable_binds = None
@@ -799,6 +800,7 @@ def main(args):
         interactive   - OPTIONAL - mode that prints info before and after test exectuion and pauses for user input for each test
         absolute_urls - OPTIONAL - mode that treats URLs in tests as absolute/full URLs instead of relative URLs
         skip_term_colors - OPTIONAL - mode that turn off the output term colors
+        junit         - OPTIONAL - Output JUnit XML for each test group
     """
 
     if 'log' in args and args['log'] is not None:
@@ -852,6 +854,9 @@ def main(args):
         if 'skip_term_colors' in args and args['skip_term_colors'] is not None:
             t.config.skip_term_colors = safe_to_bool(args['skip_term_colors'])
 
+        if 'junit' in args and args['junit'] is not None:
+            t.config.junit = safe_to_bool(args['junit'])
+
     # Execute all testsets
     failures = run_testsets(tests)
 
@@ -886,6 +891,8 @@ def parse_command_line_args(args_in):
                       action="store_true", dest="absolute_urls")
     parser.add_option(u'--skip_term_colors', help='Turn off the output term colors',
                       action='store_true', default=False, dest="skip_term_colors")
+    parser.add_option(u'--junit', help='Output JUnit XML for each test group',
+                      action='store_true', default=False, dest="junit")
 
     (args, unparsed_args) = parser.parse_args(args_in)
     args = vars(args)
