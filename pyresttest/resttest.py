@@ -12,6 +12,7 @@ import threading
 import datetime
 import errno
 import shutil
+import timeit
 from optparse import OptionParser
 from email import message_from_string  # For headers handling
 import time
@@ -23,6 +24,33 @@ except:
         from StringIO import StringIO as MyIO
     except ImportError:
         from io import BytesIO as MyIO
+
+
+def timeit_wrapper(func, *args, **kwargs):
+    """
+    Decorator to wrap function with arguments into a function without arguments, in order to pass it into timeit.timeit.
+    """
+    def wrapped():
+        return func(*args, **kwargs)
+
+    return wrapped
+
+
+def _timeit_template_func(setup, func):
+    """
+    Create a timer function. Used if the "statement" is a callable.
+    """
+    def inner(_it, _timer, _func=func):
+        setup()
+        _t0 = _timer()
+        for _i in _it:
+            retval = _func()
+        _t1 = _timer()
+        return retval, _t1 - _t0
+    return inner
+
+
+timeit._template_func = _timeit_template_func
 
 ESCAPE_DECODING = 'string-escape'
 # Python 3 compatibility
@@ -160,6 +188,7 @@ class TestResponse:
     """ Encapsulates everything about a test response """
     test = None  # Test run
     response_code = None
+    elapsed = None # Test elapsed time
 
     body = None  # Response body, if tracked
 
@@ -658,7 +687,10 @@ def run_testsets(testsets):
                 group_results[test.group] = list()
                 group_failure_counts[test.group] = 0
 
-            result = run_test(test, test_config=myconfig, context=context, curl_handle=curl_handle)
+            wrapped_test = timeit_wrapper(run_test, test, test_config=myconfig, context=context, curl_handle=curl_handle)
+            result, elapsed = timeit.timeit(wrapped_test, number=1)
+
+            result.elapsed = elapsed
             result.body = None  # Remove the body, save some memory!
 
             if not result.passed:  # Print failure, increase failure counts for that test group
@@ -748,7 +780,7 @@ def run_testsets(testsets):
 
                 for r in group_results[group]:
                     if r.passed:
-                        xml += """<testcase classname="%s" name="%s"></testcase>""" % (r.test.group, r.test.name)
+                        xml += """<testcase classname="%s" name="%s" time="%s"></testcase>""" % (r.test.group, r.test.name, r.elapsed)
                         xml += "\n"
                     else:
                         xml += """<testcase classname="%s" name="%s">""" % (r.test.group, r.test.name)
