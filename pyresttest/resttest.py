@@ -772,11 +772,9 @@ def run_testsets(testsets):
         if myconfig.junit:
             out_file = os.path.join(myconfig.junit, 'test-' + group.lower().replace(' ', '-') + '.xml')
             with open(out_file, 'w+') as f:
-                xml = """
-                <?xml version="1.0" encoding="UTF-8"?>
-                  <testsuite errors="0" failures="%d" skipped="0" name="%s" tests="%d" timestamp="%s" hostname="%s">
-                    <properties>  </properties>
-                """ % (failures, group, test_count, test_end_date, os.uname()[1])
+                xml = """<?xml version="1.0" encoding="UTF-8"?>
+                           <testsuite errors="0" failures="%d" skipped="0" name="%s" tests="%d" timestamp="%s" hostname="%s">
+                            <properties></properties>""" % (failures, group, test_count, test_end_date, os.uname()[1])
 
                 for r in group_results[group]:
                     if r.passed:
